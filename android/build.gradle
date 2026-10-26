@@ -1,0 +1,60 @@
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.buildDir = "../build"
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+    if (project.name != "app") {
+        project.evaluationDependsOn(":app")
+    }
+
+    project.afterEvaluate { p ->
+        if (p.hasProperty('android')) {
+            p.android {
+                compileSdkVersion 36
+            }
+        }
+    }
+
+    def ensureTypedefs = { p ->
+        def debugTypedefFile = p.file("${p.buildDir}/intermediates/annotations_typedef_file/debug/extractDebugAnnotations/typedefs.txt")
+        if (!debugTypedefFile.exists()) {
+            debugTypedefFile.parentFile.mkdirs()
+            debugTypedefFile.createNewFile()
+        }
+        def releaseTypedefFile = p.file("${p.buildDir}/intermediates/annotations_typedef_file/release/extractReleaseAnnotations/typedefs.txt")
+        if (!releaseTypedefFile.exists()) {
+            releaseTypedefFile.parentFile.mkdirs()
+            releaseTypedefFile.createNewFile()
+        }
+    }
+
+    def addDeps = { p ->
+        ensureTypedefs(p)
+        p.dependencies {
+            implementation 'androidx.concurrent:concurrent-futures:1.2.0'
+        }
+    }
+
+    if (project.state.executed) {
+        addDeps(project)
+    } else {
+        project.afterEvaluate { p ->
+            addDeps(p)
+        }
+    }
+
+    tasks.configureEach { task ->
+        if (task.name.contains("extractDebugAnnotations") || task.name.contains("ExtractAnnotations") || task.name.contains("extractReleaseAnnotations")) {
+            task.enabled = false
+        }
+    }
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}

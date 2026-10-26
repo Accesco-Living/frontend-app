@@ -1,0 +1,119 @@
+name: accesco_living_app
+description: A super app for Accesco Living Pvt Ltd with complete e-commerce features.
+
+publish_to: "none"
+
+version: 2.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter_localizations:
+    sdk: flutter
+  flutter:
+    sdk: flutter
+  
+  # State Management
+  provider: ^6.1.1
+  
+  # Local Storage
+  shared_preferences: ^2.2.2
+  
+  # Utilities
+  intl: ^0.20.2
+  crypto: ^3.0.3
+  
+  # HTTP client — used by Swadisht for Google Places API calls
+  http: ^1.2.1
+
+  # Launch URLs (tel, mailto, https, etc.) — used by Help & Support screen
+  url_launcher: ^6.3.2
+  
+  # UI Components
+  badges: ^3.1.2
+  flutter_spinkit: ^5.2.0
+  shimmer: ^3.0.0
+  animate_do: ^3.1.2
+  glass_kit: ^4.0.2
+  
+  # Location
+  geolocator: ^13.0.0
+  geocoding: ^3.0.0
+  permission_handler: ^11.3.1
+  
+  # Images & Camera
+  cached_network_image: ^3.3.1
+  image_picker: ^1.1.2
+  flutter_svg: ^2.0.10
+  camera: ^0.11.0
+  image: ^4.2.0
+
+  # Sharing & Screenshots
+  share_plus: ^10.0.0
+  screenshot: ^3.0.0
+
+  # Real-time WebSockets
+  web_socket_channel: ^3.0.0
+  
+  # Speech
+  # Firebase & Notifications
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  cloud_firestore: ^5.4.4
+  cloud_functions: ^5.1.0
+  firebase_storage: ^12.3.2
+  firebase_messaging: ^15.0.0
+  flutter_local_notifications: ^18.0.0
+  google_sign_in: ^6.2.1
+  
+  # Charts for CalcIQ
+  fl_chart: ^0.69.0
+  
+  # QR Code
+  qr_flutter: ^4.1.0
+  
+  # Maps & Payments
+  google_maps_flutter: ^2.10.0
+  razorpay_flutter: ^1.3.15
+  
+  # Google Fonts
+  google_fonts: ^6.2.1
+
+  # Carousel for hero banners
+  carousel_slider: ^4.2.1
+  
+  # Smooth page indicator
+  smooth_page_indicator: ^1.1.0
+
+  # Video player for hero background
+  video_player: ^2.9.2
+  speech_to_text: 7.3.0
+  flutter_contacts: ^2.3.1
+  flutter_secure_storage: ^10.3.4
+  flutter_dotenv: ^6.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  generate: true
+  uses-material-design: true
+  
+  assets:
+    - .env
+    - assets/
+    - assets/images/
+    - assets/images/accesco_logo.png
+    - assets/videos/
+    - assets/restaraunt/
+
+    - assets/images/grokly_hero_banner.png
+    - assets/images/hero_bg.jpg
+    - assets/images/pkg_small_gathering.jpg
+    - assets/images/pkg_birthday.jpg
+    - assets/images/pkg_office_lunch.jpg
+    - assets/images/pkg_mini_wedding.jpg
+    - assets/Swadishtt/

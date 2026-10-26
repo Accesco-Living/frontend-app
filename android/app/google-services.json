@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "113387637108",
+    "project_id": "accesco-db",
+    "storage_bucket": "accesco-db.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:113387637108:android:0f0b628bb21b0002190421",
+        "android_client_info": {
+          "package_name": "com.accesco.living"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "113387637108-dfj3is80b826vklt3vd2i9khs2v3gs9k.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAOIpjtfg8NDJD9f5-ADI6GgJj-0BVnzXU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "113387637108-dfj3is80b826vklt3vd2i9khs2v3gs9k.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
