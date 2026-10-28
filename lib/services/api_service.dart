@@ -292,110 +292,163 @@ class ApiService {
   // ORIGINAL AUTHENTICATION (VPS BACKEND) - RESTORED FULLY
   // =========================================================================
 
-  static Future<Map<String, dynamic>> signup({
-    required String firstName,
-    required String lastName,
-    required String email,
-    required String password,
-    String? phone,
-  }) async {
-    final fullName = '${firstName.trim()} ${lastName.trim()}'.trim();
-    final username = email.trim().contains('@')
-        ? email.trim().split('@')[0]
-        : email.trim().toLowerCase();
+static Future<Map<String, dynamic>> signup({
+  required String firstName,
+  required String lastName,
+  required String email,
+  required String password,
+  String? phone,
+}) async {
+  final cleanFirstName = firstName.trim();
+  final cleanLastName = lastName.trim();
+  final cleanEmail = email.trim().toLowerCase();
+  final cleanPhone = phone?.trim();
+  final fullName = '$cleanFirstName $cleanLastName'.trim();
 
-    final payload = {
-      'first_name': firstName.trim(),
-      'last_name': lastName.trim(),
-      'full_name': fullName,
-      'username': username,
-      'email': email.trim().toLowerCase(),
-      'password': password,
-      if (phone != null && phone.isNotEmpty) 'phone': phone,
+  final username = cleanEmail.contains('@')
+      ? cleanEmail.split('@').first
+      : cleanEmail;
+
+  // Validate the signup fields.
+  if (cleanFirstName.isEmpty || cleanLastName.isEmpty) {
+    return {
+      'success': false,
+      'error': 'First name and last name are required.',
+    };
+  }
+
+  if (!RegExp(r'^[\w.\-+]+@[\w\-]+(\.[\w\-]+)+$')
+      .hasMatch(cleanEmail)) {
+    return {
+      'success': false,
+      'error': 'Enter a valid email address.',
+    };
+  }
+
+  if (password.length < 6) {
+    return {
+      'success': false,
+      'error': 'Password must be at least 6 characters.',
+    };
+  }
+
+  final payload = <String, dynamic>{
+    'first_name': cleanFirstName,
+    'last_name': cleanLastName,
+    'full_name': fullName,
+    'username': username,
+    'email': cleanEmail,
+    'password': password,
+    if (cleanPhone != null && cleanPhone.isNotEmpty)
+      'phone': cleanPhone,
+  };
+
+  try {
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/auth/signup'),
+          headers: await _headers(
+            needsAuth: false,
+            endpoint: '/auth/signup',
+            contentHash: hashData(payload),
+          ),
+          body: json.encode(payload),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    // A failed backend response must never be treated as success.
+    if (response.statusCode != 200 &&
+        response.statusCode != 201) {
+      var errorMessage =
+          'Signup failed (${response.statusCode}).';
+
+      try {
+        final decoded = json.decode(response.body);
+
+        if (decoded is Map) {
+          final message = decoded['error'] ?? decoded['message'];
+
+          if (message != null &&
+              message.toString().trim().isNotEmpty) {
+            errorMessage = message.toString();
+          }
+        }
+      } catch (_) {
+        // Keep the status-based error for non-JSON responses.
+      }
+
+      if (response.statusCode == 404) {
+        errorMessage =
+            'Signup service is unavailable. Please contact support.';
+      }
+
+      return {
+        'success': false,
+        'error': errorMessage,
+      };
+    }
+
+    // Validate the successful response.
+    final decoded = json.decode(response.body);
+
+    if (decoded is! Map<String, dynamic>) {
+      return {
+        'success': false,
+        'error': 'The server returned an invalid signup response.',
+      };
+    }
+
+    final user = decoded['user'];
+    final userData = user is Map<String, dynamic>
+        ? user
+        : <String, dynamic>{};
+
+    final token = decoded['token']?.toString();
+
+    // Save only a token issued by the backend.
+    // Never manufacture a fake JWT or session token.
+    if (token != null && token.isNotEmpty) {
+      await saveToken(token);
+    }
+
+    final rawCqsScore = userData['cqs_score'] ?? 85.0;
+
+    final profile = <String, dynamic>{
+      'uid': userData['id']?.toString() ??
+          'usr_${DateTime.now().millisecondsSinceEpoch}',
+      'name': userData['full_name']?.toString() ??
+          userData['name']?.toString() ??
+          fullName,
+      'email': userData['email']?.toString() ?? cleanEmail,
+      'phone': userData['phone']?.toString() ?? cleanPhone ?? '',
+      'household_id': userData['household_id'] ?? 'HH-ACCESCO',
+      'credits': userData['credits'] is num
+          ? (userData['credits'] as num).toInt()
+          : 500,
+      'cqs_score':
+          rawCqsScore is num ? rawCqsScore.toDouble() : 85.0,
+      'role': userData['role']?.toString() ?? 'Resident',
     };
 
-    final contentHash = hashData(payload);
+    await saveUserProfile(profile);
 
-    try {
-      final response = await http
-          .post(
-            Uri.parse('$baseUrl/auth/signup'),
-            headers: await _headers(
-                needsAuth: false,
-                endpoint: '/auth/signup',
-                contentHash: contentHash),
-            body: json.encode(payload),
-          )
-          .timeout(const Duration(seconds: 6));
+    return {
+      'success': true,
+      'data': decoded,
+      'profile': profile,
+    };
+  } catch (e) {
+    // Network failures must not create fake accounts or sessions.
+    debugPrint('Signup request failed: $e');
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = json.decode(response.body) as Map<String, dynamic>;
-        final token = data['token']?.toString() ??
-            'vps_jwt_${DateTime.now().millisecondsSinceEpoch}';
-        await saveToken(token);
-
-        final profile = {
-          'uid': data['user']?['id']?.toString() ??
-              'usr_${DateTime.now().millisecondsSinceEpoch}',
-          'name': fullName,
-          'email': email.trim(),
-          'phone': data['user']?['phone'] ?? phone ?? '',
-          'household_id': data['user']?['household_id'] ?? 'HH-ACCESCO',
-          'credits': data['user']?['credits'] ?? 500,
-          'cqs_score': (data['user']?['cqs_score'] ?? 85.0).toDouble(),
-          'role': data['user']?['role'] ?? 'Resident',
-        };
-        await saveUserProfile(profile);
-        return {'success': true, 'data': data, 'profile': profile};
-      } else if (response.statusCode == 404) {
-        final token = 'vps_session_${DateTime.now().millisecondsSinceEpoch}';
-        await saveToken(token);
-        final profile = {
-          'uid': 'usr_${DateTime.now().millisecondsSinceEpoch}',
-          'name': fullName,
-          'email': email.trim(),
-          'phone': phone ?? '',
-          'household_id': 'HH-ACCESCO',
-          'credits': 500,
-          'cqs_score': 85.0,
-          'role': 'Resident',
-        };
-        await saveUserProfile(profile);
-
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('vps_saved_email', email.trim().toLowerCase());
-        await prefs.setString('vps_saved_password_hash', hashString(password));
-        return {'success': true, 'profile': profile, 'isLocalSession': true};
-      } else {
-        String errorMsg = 'Signup failed (${response.statusCode})';
-        try {
-          final err = json.decode(response.body);
-          if (err is Map && err.containsKey('error'))
-            errorMsg = err['error'].toString();
-          else if (err is Map && err.containsKey('message'))
-            errorMsg = err['message'].toString();
-        } catch (_) {}
-        return {'success': false, 'error': errorMsg};
-      }
-    } catch (e) {
-      final token = 'vps_session_${DateTime.now().millisecondsSinceEpoch}';
-      await saveToken(token);
-      final profile = {
-        'uid': 'usr_${DateTime.now().millisecondsSinceEpoch}',
-        'name': fullName,
-        'email': email.trim(),
-        'household_id': 'HH-ACCESCO',
-        'credits': 500,
-        'cqs_score': 85.0,
-        'role': 'Resident',
-      };
-      await saveUserProfile(profile);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('vps_saved_email', email.trim().toLowerCase());
-      await prefs.setString('vps_saved_password_hash', hashString(password));
-      return {'success': true, 'profile': profile, 'isLocalSession': true};
-    }
+    return {
+      'success': false,
+      'error':
+          'Unable to connect to the server. Please try again.',
+    };
   }
+}
+
 
   static Future<Map<String, dynamic>> login(
       String email, String password) async {
