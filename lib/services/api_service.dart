@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// ---------------------------------------------------------------------------
 /// ACCESCO LIVING — API SERVICE
@@ -137,12 +136,21 @@ class ApiService {
   // TOKEN & USER PROFILE PERSISTENCE
   // =========================================================================
 
+  /// Reads the server-issued authentication token from encrypted device storage.
   static Future<String?> getToken() async {
-    return await _secureStorage.read(key: _tokenKey);
+    final token = await _secureStorage.read(key: _tokenKey);
+    if (token == null || token.trim().isEmpty) return null;
+    return token;
   }
 
+  /// Persists a non-empty token returned by the backend.
+  /// Never pass demo/session placeholder strings to this method.
   static Future<void> saveToken(String token) async {
-    await _secureStorage.write(key: _tokenKey, value: token);
+    final value = token.trim();
+    if (value.isEmpty) {
+      throw ArgumentError.value(token, 'token', 'Token must not be empty.');
+    }
+    await _secureStorage.write(key: _tokenKey, value: value);
   }
 
   static Future<void> clearToken() async {
@@ -330,8 +338,14 @@ class ApiService {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = json.decode(response.body) as Map<String, dynamic>;
-        final token = data['token']?.toString() ??
-            'vps_jwt_${DateTime.now().millisecondsSinceEpoch}';
+        final token = data['token']?.toString().trim();
+        if (token == null || token.isEmpty) {
+          await clearToken();
+          return {
+            'success': false,
+            'error': 'Signup response did not include an authentication token.'
+          };
+        }
         await saveToken(token);
 
         final profile = {
@@ -348,8 +362,8 @@ class ApiService {
         await saveUserProfile(profile);
         return {'success': true, 'data': data, 'profile': profile};
       } else if (response.statusCode == 404) {
-        final token = 'vps_session_${DateTime.now().millisecondsSinceEpoch}';
-        await saveToken(token);
+        // Demo profile only: never store a placeholder as an authentication token.
+        await clearToken();
         final profile = {
           'uid': 'usr_${DateTime.now().millisecondsSinceEpoch}',
           'name': fullName,
@@ -378,8 +392,8 @@ class ApiService {
         return {'success': false, 'error': errorMsg};
       }
     } catch (e) {
-      final token = 'vps_session_${DateTime.now().millisecondsSinceEpoch}';
-      await saveToken(token);
+      // Offline demo profile only: it is not an authenticated backend session.
+      await clearToken();
       final profile = {
         'uid': 'usr_${DateTime.now().millisecondsSinceEpoch}',
         'name': fullName,
@@ -416,9 +430,15 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
-        if (data.containsKey('token')) {
-          await saveToken(data['token'].toString());
+        final token = data['token']?.toString().trim();
+        if (token == null || token.isEmpty) {
+          await clearToken();
+          return {
+            'success': false,
+            'error': 'Login response did not include an authentication token.'
+          };
         }
+        await saveToken(token);
         final profile = {
           'uid': data['user']?['id']?.toString() ??
               'usr_${DateTime.now().millisecondsSinceEpoch}',
@@ -450,10 +470,13 @@ class ApiService {
             savedPwHash == currentPwHash) {
           final cached = await getUserProfile();
           if (cached != null) {
-            final token =
-                'vps_session_${DateTime.now().millisecondsSinceEpoch}';
-            await saveToken(token);
-            return {'success': true, 'profile': cached};
+            // Cached demo login is not a server-authenticated session.
+            await clearToken();
+            return {
+              'success': true,
+              'profile': cached,
+              'isLocalSession': true
+            };
           }
         }
 
@@ -475,7 +498,15 @@ class ApiService {
           savedEmail == email.trim().toLowerCase() &&
           savedPwHash == currentPwHash) {
         final cached = await getUserProfile();
-        if (cached != null) return {'success': true, 'profile': cached};
+        if (cached != null) {
+          // Cached demo login is not a server-authenticated session.
+          await clearToken();
+          return {
+            'success': true,
+            'profile': cached,
+            'isLocalSession': true
+          };
+        }
       }
       return {
         'success': false,
@@ -606,8 +637,15 @@ class ApiService {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = json.decode(response.body) as Map<String, dynamic>;
-        final token = data['token']?.toString() ??
-            'vps_jwt_otp_${DateTime.now().millisecondsSinceEpoch}';
+        final token = data['token']?.toString().trim();
+        if (token == null || token.isEmpty) {
+          await clearToken();
+          return {
+            'success': false,
+            'error':
+                'OTP verification response did not include an authentication token.'
+          };
+        }
         await saveToken(token);
 
         final profile = {
@@ -631,10 +669,8 @@ class ApiService {
             cleanOtp == '123456';
 
         if (isMatch) {
-          final token =
-              'vps_session_otp_${hashString('$cleanPhone:${DateTime.now().millisecondsSinceEpoch}')}';
-          await saveToken(token);
-
+          // Local OTP demo verification is not a server-authenticated session.
+          await clearToken();
           final cachedProfile = await getUserProfile();
           final profile = {
             'uid': cachedProfile?['uid'] ?? 'usr_${strongHashInt(cleanPhone)}',
@@ -672,9 +708,8 @@ class ApiService {
           (storedHash != null && storedHash == otpHash) || cleanOtp == '123456';
 
       if (isMatch) {
-        final token =
-            'vps_session_otp_${hashString('$cleanPhone:${DateTime.now().millisecondsSinceEpoch}')}';
-        await saveToken(token);
+        // Local OTP demo verification is not a server-authenticated session.
+        await clearToken();
         final cachedProfile = await getUserProfile();
         final profile = {
           'uid': cachedProfile?['uid'] ?? 'usr_${strongHashInt(cleanPhone)}',
