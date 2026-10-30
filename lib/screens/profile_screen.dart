@@ -199,6 +199,16 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF6B0721), size: 20),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        if (Navigator.canPop(context)) {
+                          Navigator.pop(context);
+                        }
+                      },
+                    ),
                     const SizedBox(width: 8),
 
                     // Accesco Logo
@@ -292,7 +302,8 @@ class ProfileScreen extends StatelessWidget {
                               String nameToShow = (user?.name?.isNotEmpty == true) ? user!.name : 'Santosh Reddy';
                               String phoneToShow = phoneNumber.isNotEmpty ? phoneNumber : '+91 99999 99999';
                               String emailToShow = email.isNotEmpty ? email : 'Sample@gmail.com';
-                              String cityToShow = 'Bengaluru, KAR';
+                              String cityToShow = '';
+                              bool hasAddress = false;
                               String memberNumber = 'AC-2026-004821';
                               String totalOrders = '0';
                               String rewardPoints = '0';
@@ -319,6 +330,7 @@ class ProfileScreen extends StatelessWidget {
                                   }
                                   if ((data['city']?.toString().trim() ?? '').isNotEmpty) {
                                     cityToShow = data['city'].toString().trim();
+                                    hasAddress = true;
                                   }
                                   if ((data['memberNumber']?.toString().trim() ?? '').isNotEmpty) {
                                     memberNumber = data['memberNumber'].toString().trim();
@@ -384,9 +396,31 @@ class ProfileScreen extends StatelessWidget {
                                                   style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900),
                                                 ),
                                                 const SizedBox(height: 12),
-                                                Text(
+                                                hasAddress
+                                                    ? Text(
                                                   cityToShow,
                                                   style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
+                                                )
+                                                    : GestureDetector(
+                                                  onTap: () {
+                                                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileAddressScreen()));
+                                                  },
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white.withOpacity(0.2),
+                                                      borderRadius: BorderRadius.circular(12),
+                                                      border: Border.all(color: Colors.white54, width: 0.5),
+                                                    ),
+                                                    child: const Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Icon(Icons.add_location_alt_outlined, color: Colors.white, size: 12),
+                                                        SizedBox(width: 4),
+                                                        Text('Add Address', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
+                                                      ],
+                                                    ),
+                                                  ),
                                                 ),
                                               ],
                                             ),
