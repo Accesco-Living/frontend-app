@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:accesco_living_app/expense_meter/screens/xpense_home.dart';
 import 'package:flutter/material.dart';
 import '../providers/address_provider.dart';
+import '../services/api_service.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -64,6 +66,9 @@ class _MainDashboardState extends State<MainDashboard> with RouteAware, WidgetsB
   final FocusNode _searchFocus = FocusNode();
   String _searchQuery = '';
   bool _isSearching = false;
+  Timer? _restaurantSearchDebounce;
+  List<dynamic> _restaurantSearchResults = [];
+  bool _isRestaurantSearchLoading = false;
   double _topPadding = 0;
   double _headerHeight = 160; // fallback; measured after first frame
   final GlobalKey _headerKey = GlobalKey();
@@ -88,7 +93,9 @@ class _MainDashboardState extends State<MainDashboard> with RouteAware, WidgetsB
     _fetchLocation();
     _initVideo();
     _searchController.addListener(() {
-      setState(() => _searchQuery = _searchController.text.trim());
+      final query = _searchController.text.trim();
+      setState(() => _searchQuery = query);
+      _onMainRestaurantSearchChanged(query);
     });
     _searchFocus.addListener(() {
       setState(() => _isSearching = _searchFocus.hasFocus);
@@ -576,6 +583,123 @@ class _MainDashboardState extends State<MainDashboard> with RouteAware, WidgetsB
 
     matched.sort((a, b) => rank(a).compareTo(rank(b)));
     return matched;
+  }
+
+  void _onMainRestaurantSearchChanged(String value) {
+    _restaurantSearchDebounce?.cancel();
+    final query = value.trim();
+
+    if (query.isEmpty) {
+      setState(() {
+        _restaurantSearchResults = [];
+        _isRestaurantSearchLoading = false;
+      });
+      return;
+    }
+
+    _restaurantSearchDebounce = Timer(
+      const Duration(milliseconds: 500),
+      () async {
+        if (!mounted) return;
+        setState(() => _isRestaurantSearchLoading = true);
+
+        try {
+          final results = await ApiService.searchRestaurants(query);
+          if (!mounted) return;
+          setState(() {
+            _restaurantSearchResults = results;
+            _isRestaurantSearchLoading = false;
+          });
+        } catch (e) {
+          debugPrint('Main dashboard restaurant search failed: $e');
+          if (!mounted) return;
+          setState(() {
+            _restaurantSearchResults = [];
+            _isRestaurantSearchLoading = false;
+          });
+        }
+      },
+    );
+  }
+
+  String _restaurantResultName(dynamic restaurant) {
+    if (restaurant is Map) {
+      return (restaurant['name'] ??
+              restaurant['restaurant_name'] ??
+              restaurant['restaurantName'] ??
+              'Restaurant')
+          .toString();
+    }
+    return restaurant.toString();
+  }
+
+  Widget _buildMainSearchResults() {
+    final localItems = _filteredItems.take(10).toList();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_isRestaurantSearchLoading)
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 10),
+                Text('Searching restaurants...'),
+              ],
+            ),
+          ),
+        if (_restaurantSearchResults.isNotEmpty) ...[
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 6),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Restaurants',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+          for (final restaurant in _restaurantSearchResults.take(10))
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Color(0xFFFFF3EC),
+                child: Icon(Icons.restaurant, color: Color(0xFFFC8019)),
+              ),
+              title: Text(
+                _restaurantResultName(restaurant),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: const Text('Restaurant'),
+              onTap: () {
+                final name = _restaurantResultName(restaurant);
+                _clearSearch();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SwadistScreen(initialSearchQuery: name),
+                  ),
+                );
+              },
+            ),
+          if (localItems.isNotEmpty)
+            const Divider(height: 1),
+        ],
+        if (localItems.isNotEmpty)
+          _buildResultsList(),
+        if (!_isRestaurantSearchLoading &&
+            _restaurantSearchResults.isEmpty &&
+            localItems.isEmpty)
+          _buildNoResults(),
+      ],
+    );
   }
 
   void _navigateBestMatch() {
@@ -1385,9 +1509,7 @@ class _MainDashboardState extends State<MainDashboard> with RouteAware, WidgetsB
                         child: SingleChildScrollView(
                           child: _searchQuery.isEmpty
                               ? _buildSearchSuggestions()
-                              : _filteredItems.isEmpty
-                                  ? _buildNoResults()
-                                  : _buildResultsList(),
+                              : _buildMainSearchResults(),
                         ),
                       ),
                     ),

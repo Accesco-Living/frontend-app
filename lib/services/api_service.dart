@@ -714,7 +714,34 @@ class ApiService {
   // =========================================================================
   // SWADISHT APIs & ORIGINAL FOOD/CART LOGIC RESTORED
   // =========================================================================
+  static Future<List<dynamic>> searchRestaurants(
+  String search, {
+  bool forceRefresh = true,
+}) async {
+  final query = search.trim();
 
+  if (query.isEmpty) return [];
+
+  try {
+    final data = await fetchData(
+      endpoint: '/restaurants',
+      queryParams: {'search': query},
+      cacheTtl: const Duration(minutes: 1),
+      forceRefresh: forceRefresh,
+    );
+
+    if (data is Map && data.containsKey('restaurants')) {
+      return data['restaurants'] as List<dynamic>? ?? [];
+    } else if (data is List) {
+      return data;
+    }
+
+    return [];
+  } catch (e) {
+    debugPrint('Error searching restaurants: $e');
+    rethrow;
+  }
+}
   static Future<List<dynamic>> getFoodItems({
     String category = '',
     int page = 1,
