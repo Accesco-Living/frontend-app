@@ -618,6 +618,12 @@ class _SwadistScreenState extends State<SwadistScreen> {
   bool _isLoadingApi = true;
   List<dynamic> _apiCategories = [];
   List<SwadistRestaurant> _apiRestaurants = [];
+ 
+
+Timer? _restaurantSearchDebounce;
+List<SwadistRestaurant> _restaurantSearchResults = [];
+bool _isSearchingRestaurants = false;
+int _restaurantSearchRequestId = 0;
 
   final List<_FoodCategory> _categories = [
     const _FoodCategory(name: 'All', imageUrl: ''),
@@ -690,9 +696,12 @@ class _SwadistScreenState extends State<SwadistScreen> {
     if (widget.initialSearchQuery.isNotEmpty) {
       _searchController.text = widget.initialSearchQuery;
     }
-    _searchController.addListener(() {
-      if (mounted) setState(() {});
-    });
+    
+      _searchController.addListener(() {
+  if (mounted) setState(() {});
+  _onRestaurantSearchChanged(_searchController.text);
+});
+      
   }
 
   // ── NEW API FETCH LOGIC WITH FALLBACK ──
@@ -717,6 +726,60 @@ class _SwadistScreenState extends State<SwadistScreen> {
       }
     }
   }
+  void _onRestaurantSearchChanged(String value) {
+    _restaurantSearchDebounce?.cancel();
+    final query = value.trim();
+    final requestId = ++_restaurantSearchRequestId;
+
+    if (query.isEmpty) {
+      setState(() {
+        _restaurantSearchResults = [];
+        _isSearchingRestaurants = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isSearchingRestaurants = true;
+      _restaurantSearchResults = [];
+    });
+
+    _restaurantSearchDebounce = Timer(
+      const Duration(milliseconds: 500),
+      () async {
+        if (!mounted || requestId != _restaurantSearchRequestId) return;
+
+        try {
+          // Swadisht's verified backend search route is /api/s/food/items?search=...
+          // It returns a paginated map containing an "items" list.
+          final response = await ApiService.getSwadishtItems(
+            search: query,
+            page: 1,
+            limit: 100,
+          );
+
+          if (!mounted || requestId != _restaurantSearchRequestId) return;
+
+          final dynamic rawItems = response['items'];
+          final items = rawItems is List ? rawItems : <dynamic>[];
+          final results = _convertApiItemsToRestaurants(items);
+
+          setState(() {
+            _restaurantSearchResults = results;
+            _isSearchingRestaurants = false;
+          });
+        } catch (e) {
+          debugPrint('Swadisht food search failed: $e');
+          if (!mounted || requestId != _restaurantSearchRequestId) return;
+          setState(() {
+            _restaurantSearchResults = [];
+            _isSearchingRestaurants = false;
+          });
+        }
+      },
+    );
+  }
+
   // ── HELPER: CONVERT API ITEMS TO UI RESTAURANTS ──
   List<SwadistRestaurant> _convertApiItemsToRestaurants(List<dynamic> apiItems) {
     if (apiItems.isEmpty) return [];
@@ -747,8 +810,8 @@ class _SwadistScreenState extends State<SwadistScreen> {
       bool isPureVeg = menuItems.every((item) => item.isVeg);
 
       mapped.add(SwadistRestaurant(
-        id: 'api_rest_\$idCounter',
-        name: 'Swadishtt \$categoryName',
+        id: 'api_rest_$idCounter',
+        name: 'Swadishtt $categoryName',
         cuisine: categoryName,
         imageUrl: menuItems.first.imageUrl, // Use first item's image
         rating: 4.5,
@@ -837,6 +900,7 @@ class _SwadistScreenState extends State<SwadistScreen> {
 
   @override
   void dispose() {
+    _restaurantSearchDebounce?.cancel();
     _bannerTimer?.cancel();
     _bannerCtrl.dispose();
     _searchController.dispose();
@@ -903,7 +967,11 @@ class _SwadistScreenState extends State<SwadistScreen> {
     final query = _searchController.text.trim().toLowerCase();
 
     // ── USE API DATA IF AVAILABLE, ELSE FALLBACK ──
-    final sourceList = _apiRestaurants.isNotEmpty ? _apiRestaurants : _fallbackPopularRestaurants;
+    final sourceList = query.isNotEmpty
+    ? _restaurantSearchResults
+    : (_apiRestaurants.isNotEmpty
+        ? _apiRestaurants
+        : _fallbackPopularRestaurants);
 
     return sourceList.where((r) {
       // Search query filter (restaurant name, cuisine, or menu items)
@@ -1239,9 +1307,18 @@ class _SwadistScreenState extends State<SwadistScreen> {
                         child: _buildSectionHeader(visibleRestaurants.length)),
 
                     // ── Restaurant list
-                    if (visibleRestaurants.isEmpty)
-                      SliverToBoxAdapter(child: _buildEmptyState())
-                    else
+                    if (_isSearchingRestaurants)
+  const SliverToBoxAdapter(
+    child: Padding(
+      padding: EdgeInsets.all(24),
+      child: Center(
+        child: CircularProgressIndicator(),
+      ),
+    ),
+  )
+else if (visibleRestaurants.isEmpty)
+  SliverToBoxAdapter(child: _buildEmptyState())
+else
                       SliverPadding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         sliver: SliverGrid(
