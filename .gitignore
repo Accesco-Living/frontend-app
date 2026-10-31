@@ -12,6 +12,13 @@
 .swiftpm/
 migrate_working_dir/
 
+# Backup and temporary files
+*.bak
+*.backup
+*.old
+*.orig
+*~
+
 # IntelliJ related
 *.iml
 *.ipr
@@ -51,4 +58,3 @@ app.*.map.json
 credentials*.json
 *.key.json
 .env
-
